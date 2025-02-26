@@ -1,30 +1,24 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket
 from pydantic import BaseModel
-from typing import List
+import json
 
 app = FastAPI()
-
-active_connections: List[WebSocket] = []
 
 class Message(BaseModel):
     sender: str
     message: str
 
-@app.get("/")
-def read_root():
-    return {"message": "Backend is running"}
-
-
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
     try:
-        await websocket.accept()
-        active_connections.add(websocket)
         while True:
-            data = await websocket.receive_json()
-            parsed_data = Message(**data)
-            for connection in active_connections:
-                await connection.send_json(parsed_data.dict())
-    except WebSocketDisconnect:
-        active_connections.remove(websocket)
-        await websocket.close()
+            data = await websocket.receive_text()
+            try:
+                parsed_data = json.loads(data) 
+                message = Message(**parsed_data)
+                await websocket.send_text(f"Message from {message.sender}: {message.message}")
+            except Exception as e:
+                await websocket.send_text(f"Invalid message format: {str(e)}")
+    except Exception:
+        pass
