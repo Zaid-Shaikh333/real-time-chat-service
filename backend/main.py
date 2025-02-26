@@ -1,8 +1,14 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
+from typing import List
 
 app = FastAPI()
 
-active_connections = set()
+active_connections: List[WebSocket] = []
+
+class Message(BaseModel):
+    sender: str
+    message: str
 
 @app.get("/")
 def read_root():
@@ -15,9 +21,10 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.accept()
         active_connections.add(websocket)
         while True:
-            data = await websocket.receive_text()
+            data = await websocket.receive_json()
+            parsed_data = Message(**data)
             for connection in active_connections:
-                await connection.send_text(data)
+                await connection.send_json(parsed_data.dict())
     except WebSocketDisconnect:
         active_connections.remove(websocket)
         await websocket.close()
